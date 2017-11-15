@@ -1493,6 +1493,12 @@ enum drm_i915_perf_property_id {
 	DRM_I915_PERF_PROP_SAMPLE_GPU_TS,
 
 	/**
+	 * This property requests inclusion of CLOCK_MONOTONIC system time in
+	 * the perf sample data.
+	 */
+	DRM_I915_PERF_PROP_SAMPLE_SYSTEM_TS,
+
+	/**
 	 * The value specifies which set of OA unit metrics should be
 	 * be configured, defining the contents of any OA unit reports.
 	 */
@@ -1579,6 +1585,7 @@ enum drm_i915_perf_record_type {
 	 *
 	 *     { u32 oa_report[]; } && DRM_I915_PERF_PROP_SAMPLE_OA
 	 *     { u64 gpu_timestamp; } && DRM_I915_PERF_PROP_SAMPLE_GPU_TS
+	 *     { u64 system_timestamp; } && DRM_I915_PERF_PROP_SAMPLE_SYSTEM_TS
 	 * };
 	 */
 	DRM_I915_PERF_RECORD_SAMPLE = 1,
