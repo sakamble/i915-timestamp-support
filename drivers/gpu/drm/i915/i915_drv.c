@@ -28,6 +28,7 @@
  */
 
 #include <linux/acpi.h>
+#include <linux/clocksource.h>
 #include <linux/device.h>
 #include <linux/oom.h>
 #include <linux/module.h>
@@ -1299,6 +1300,63 @@ static void i915_driver_unregister(struct drm_i915_private *dev_priv)
 }
 
 /**
+* i915_cyclecounter_read - read raw cycle counter
+* @cc: cyclecounter structure
+*/
+u64 i915_cyclecounter_read(const struct cyclecounter *cc)
+{
+	struct drm_i915_private *dev_priv =
+		container_of(cc, typeof(*dev_priv),
+			     cc);
+	u64 ts_count;
+
+	intel_runtime_pm_get(dev_priv);
+	ts_count = I915_READ64_2x32(GEN4_TIMESTAMP,
+				    GEN7_TIMESTAMP_UDW);
+	intel_runtime_pm_put(dev_priv);
+
+	trace_printk("%llu\n", ts_count);
+
+	return ts_count;
+}
+
+static void i915_perf_start_cyclecounter(struct drm_i915_private *dev_priv)
+{
+	int cs_ts_freq = dev_priv->perf.oa.timestamp_frequency;
+	struct cyclecounter *cc = &dev_priv->cc;
+	u32 maxsec;
+
+	cc->read = i915_cyclecounter_read;
+	cc->mask = CYCLECOUNTER_MASK(CS_TIMESTAMP_WIDTH(dev_priv));
+	maxsec = cc->mask / cs_ts_freq;
+
+	clocks_calc_mult_shift(&cc->mult, &cc->shift, cs_ts_freq,
+			       NSEC_PER_SEC, maxsec);
+}
+
+#define SYSTIME_START_OFFSET	350000 /* Counter read takes about 350us */
+
+static void i915_perf_start_timecounter(struct drm_i915_private *dev_priv)
+{
+	unsigned long flags;
+	u64 ns;
+
+	i915_perf_start_cyclecounter(dev_priv);
+
+	spin_lock_init(&dev_priv->systime_lock);
+
+	getnstimeofday64(&dev_priv->start_systime);
+	ns = timespec64_to_ns(&dev_priv->start_systime) + SYSTIME_START_OFFSET;
+
+	trace_printk("sys start time: %llu\n", ns);
+
+	/* Start the timecounter */
+	spin_lock_irqsave(&dev_priv->systime_lock, flags);
+	timecounter_init(&dev_priv->tc, &dev_priv->cc, ns);
+	spin_unlock_irqrestore(&dev_priv->systime_lock, flags);
+}
+
+/**
  * i915_driver_load - setup chip and create an initial config
  * @pdev: PCI device
  * @ent: matching PCI ID entry
@@ -1378,6 +1436,8 @@ int i915_driver_load(struct pci_dev *pdev, const struct pci_device_id *ent)
 		goto out_cleanup_hw;
 
 	i915_driver_register(dev_priv);
+
+	i915_perf_start_timecounter(dev_priv);
 
 	intel_runtime_pm_enable(dev_priv);
 

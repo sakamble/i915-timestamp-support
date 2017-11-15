@@ -3153,6 +3153,23 @@ static int i915_engine_info(struct seq_file *m, void *unused)
 	return 0;
 }
 
+static int i915_timestamp_info(struct seq_file *m, void *unused)
+{
+	struct drm_i915_private *dev_priv = node_to_i915(m->private);
+	u64 ts = i915_cyclecounter_read(&dev_priv->cc);
+	u64 ns;
+
+	getnstimeofday64(&dev_priv->start_systime);
+	ns = timespec64_to_ns(&dev_priv->start_systime);
+
+	trace_printk("sys time: %llu\n", ns);
+
+	trace_printk("ts: %llu device time: %llu\n",
+		     ts, timecounter_cyc2time(&dev_priv->tc, ts));
+
+	return 0;
+}
+
 static int i915_shrinker_info(struct seq_file *m, void *unused)
 {
 	struct drm_i915_private *i915 = node_to_i915(m->private);
@@ -4640,6 +4657,7 @@ static const struct drm_info_list i915_debugfs_list[] = {
 	{"i915_dmc_info", i915_dmc_info, 0},
 	{"i915_display_info", i915_display_info, 0},
 	{"i915_engine_info", i915_engine_info, 0},
+	{"i915_timestamp_info", i915_timestamp_info, 0},
 	{"i915_shrinker_info", i915_shrinker_info, 0},
 	{"i915_shared_dplls_info", i915_shared_dplls_info, 0},
 	{"i915_dp_mst_info", i915_dp_mst_info, 0},

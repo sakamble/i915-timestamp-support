@@ -2154,14 +2154,6 @@ struct i915_perf_stream {
 	struct i915_oa_config *oa_config;
 
 	u64 last_gpu_ts;
-
-	/**
-	 * System time correlation variables.
-	 */
-	struct cyclecounter cc;
-	spinlock_t systime_lock;
-	struct timespec64 start_systime;
-	struct timecounter tc;
 };
 
 /**
@@ -2807,6 +2799,14 @@ struct drm_i915_private {
 	 * NOTE: This is the dri1/ums dungeon, don't add stuff here. Your patch
 	 * will be rejected. Instead look for a better place.
 	 */
+
+	/**
+	 * System time correlation structure.
+	 */
+	struct cyclecounter cc;
+	spinlock_t systime_lock;
+	struct timespec64 start_systime;
+	struct timecounter tc;
 };
 
 static inline struct drm_i915_private *to_i915(const struct drm_device *dev)
@@ -3372,6 +3372,7 @@ extern long i915_compat_ioctl(struct file *filp, unsigned int cmd,
 #endif
 extern const struct dev_pm_ops i915_pm_ops;
 
+extern u64 i915_cyclecounter_read(const struct cyclecounter *cc);
 extern int i915_driver_load(struct pci_dev *pdev,
 			    const struct pci_device_id *ent);
 extern void i915_driver_unload(struct drm_device *dev);
