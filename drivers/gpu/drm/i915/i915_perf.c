@@ -622,8 +622,6 @@ static int append_oa_sample(struct i915_perf_stream *stream,
 	int report_size = dev_priv->perf.oa.oa_buffer.format_size;
 	struct drm_i915_perf_record_header header;
 	u32 sample_flags = stream->sample_flags;
-	u64 gpu_ts = 0;
-	u64 system_ts = 0;
 
 	header.type = DRM_I915_PERF_RECORD_SAMPLE;
 	header.pad = 0;
@@ -637,15 +635,9 @@ static int append_oa_sample(struct i915_perf_stream *stream,
 		return -EFAULT;
 	buf += sizeof(header);
 
-	if (sample_flags & SAMPLE_OA_REPORT) {
-		if (copy_to_user(buf, report, report_size))
-			return -EFAULT;
-		buf += report_size;
-	}
-
 	if (sample_flags & SAMPLE_GPU_TS) {
 		/* Timestamp populated from OA report */
-		gpu_ts = get_gpu_ts_from_oa_report(stream, report);
+		u64 gpu_ts = get_gpu_ts_from_oa_report(stream, report);
 
 		if (copy_to_user(buf, &gpu_ts, I915_PERF_TS_SAMPLE_SIZE))
 			return -EFAULT;
@@ -653,7 +645,7 @@ static int append_oa_sample(struct i915_perf_stream *stream,
 	}
 
 	if (sample_flags & SAMPLE_SYSTEM_TS) {
-		gpu_ts = get_gpu_ts_from_oa_report(stream, report);
+		u64 gpu_ts = get_gpu_ts_from_oa_report(stream, report);
 		/*
 		 * XXX: timecounter_cyc2time considers time backwards if delta
 		 * timestamp is more than half the max ns time covered by
@@ -662,10 +654,17 @@ static int append_oa_sample(struct i915_perf_stream *stream,
 		 * by explicitly reading the timecounter (timecounter_read)
 		 * before this duration.
 		 */
-		system_ts = timecounter_cyc2time(&stream->tc, gpu_ts);
+		u64 system_ts = timecounter_cyc2time(&stream->tc, gpu_ts);
 
 		if (copy_to_user(buf, &system_ts, I915_PERF_TS_SAMPLE_SIZE))
 			return -EFAULT;
+		buf += I915_PERF_TS_SAMPLE_SIZE;
+	}
+
+	if (sample_flags & SAMPLE_OA_REPORT) {
+		if (copy_to_user(buf, report, report_size))
+			return -EFAULT;
+		buf += report_size;
 	}
 
 	(*offset) += header.size;
@@ -2466,7 +2465,7 @@ static u64 i915_cyclecounter_read(const struct cyclecounter *cc)
 				    GEN7_TIMESTAMP_UDW);
 	intel_runtime_pm_put(dev_priv);
 
-	stream->last_gpu_ts = ts_count;
+	/* stream->last_gpu_ts = ts_count; */
 
 	return ts_count;
 }
@@ -2474,7 +2473,8 @@ static u64 i915_cyclecounter_read(const struct cyclecounter *cc)
 static void i915_perf_init_cyclecounter(struct i915_perf_stream *stream)
 {
 	struct drm_i915_private *dev_priv = stream->dev_priv;
-	int cs_ts_freq = dev_priv->perf.oa.timestamp_frequency;
+	int cs_ts_freq = 1000 *
+		INTEL_INFO(dev_priv)->cs_timestamp_frequency_khz;
 	struct cyclecounter *cc = &stream->cc;
 	u32 maxsec;
 
